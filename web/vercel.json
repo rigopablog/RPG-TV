@@ -1,0 +1,22 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": ".next",
+  "headers": [
+    {
+      "source": "/watch/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-src 'self' https://vidsrc.to https://vidsrc.xyz https://embed.su https://www.2embed.cc https://multiembed.mov https://www.youtube.com; media-src 'self' https://*.download.real-debrid.com https://*.real-debrid.com blob:;"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "app/api/stream-sources/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}
