@@ -20,8 +20,8 @@ import VideoPlayer, { type VSource, type VSubtitle } from '@/components/VideoPla
 function embedUrl(type: string, id: number, s: number, e: number, server: string) {
   const qs = new URLSearchParams({ type, tmdb: String(id), season: String(s), episode: String(e) })
   switch (server) {
-    case 'proxy-vidsrc-in':
-      qs.set('source', 'vidsrc-in')
+    case 'proxy-vidsrc':
+      qs.set('source', 'vidsrc-me')
       return `/api/embed-proxy?${qs}`
     case 'proxy-embed-su':
       qs.set('source', 'embed-su')
@@ -49,13 +49,13 @@ function embedUrl(type: string, id: number, s: number, e: number, server: string
 //   - TV: proxy first (works, kills popups) → raw embeds as backup
 //   - Movies: proxy still helps lightly-protected ones; raw embeds after
 const TV_SERVERS = [
-  { key: 'proxy-vidsrc-in', label: 'Server 1 (ad-free)' },
+  { key: 'proxy-vidsrc',    label: 'Server 1 (ad-free)' },
   { key: 'proxy-embed-su',  label: 'Server 2 (ad-free)' },
   { key: 'vidsrc-to',       label: 'Server 3' },
   { key: 'vidsrc-xyz',      label: 'Server 4' },
 ]
 const MOVIE_SERVERS = [
-  { key: 'proxy-vidsrc-in', label: 'Server 1 (ad-free)' },
+  { key: 'proxy-vidsrc',    label: 'Server 1 (ad-free)' },
   { key: 'vidsrc-to',       label: 'Server 2' },
   { key: 'embed-su',        label: 'Server 3' },
   { key: '2embed',          label: 'Server 4' },

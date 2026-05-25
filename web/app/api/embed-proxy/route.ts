@@ -26,6 +26,7 @@ export const dynamic = 'force-dynamic'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0 Safari/537.36'
 
 // ── Source URL builders ────────────────────────────────────────────────────
+// NB: vidsrc.in 404s as of May 2026; vidsrc.me redirects to vidsrcme.ru and is alive.
 function buildSourceUrl(opts: {
   source: string
   type: 'movie' | 'tv'
@@ -36,11 +37,17 @@ function buildSourceUrl(opts: {
 }): string | null {
   const { source, type, imdb, tmdb, season = 1, episode = 1 } = opts
   switch (source) {
-    case 'vidsrc-in':
-      if (!imdb) return null
+    case 'vidsrc-me':
+    case 'vidsrc-in': // legacy alias — routes to vidsrc.me now
+      if (imdb) {
+        return type === 'movie'
+          ? `https://vidsrc.me/embed/movie?imdb=${imdb}`
+          : `https://vidsrc.me/embed/tv?imdb=${imdb}&season=${season}&episode=${episode}`
+      }
+      if (!tmdb) return null
       return type === 'movie'
-        ? `https://vidsrc.in/embed/${imdb}`
-        : `https://vidsrc.in/embed/${imdb}/${season}-${episode}/`
+        ? `https://vidsrc.me/embed/movie?tmdb=${tmdb}`
+        : `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}`
     case 'vidsrc-xyz':
       if (!tmdb) return null
       return type === 'movie'
@@ -152,10 +159,12 @@ export async function GET(req: NextRequest) {
     return new Response('Could not build source URL (missing IMDB?)', { status: 502 })
   }
 
-  // Fetch upstream embed page
+  // Fetch upstream embed page (follow redirects — vidsrc.me → vidsrcme.ru)
   let html: string
+  let finalUrl = sourceUrl
   try {
     const upstream = await fetch(sourceUrl, {
+      redirect: 'follow',
       headers: {
         'User-Agent': UA,
         Referer: new URL(sourceUrl).origin,
@@ -163,6 +172,7 @@ export async function GET(req: NextRequest) {
       },
       signal: AbortSignal.timeout(10000),
     })
+    finalUrl = upstream.url || sourceUrl
     if (!upstream.ok) {
       return new Response(`Upstream ${upstream.status}`, { status: 502 })
     }
@@ -172,15 +182,15 @@ export async function GET(req: NextRequest) {
   }
 
   // Find the inner player iframe
-  const innerSrc = extractInnerIframe(html, sourceUrl)
+  const innerSrc = extractInnerIframe(html, finalUrl)
   if (!innerSrc) {
     // Fall back to wrapping the source URL itself — still gains sandbox isolation
-    return new Response(wrapperPage(sourceUrl, sourceUrl), {
+    return new Response(wrapperPage(finalUrl, finalUrl), {
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
     })
   }
 
-  return new Response(wrapperPage(innerSrc, sourceUrl), {
+  return new Response(wrapperPage(innerSrc, finalUrl), {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
   })
 }
