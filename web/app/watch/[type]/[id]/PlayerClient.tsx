@@ -182,13 +182,38 @@ const [season,  setSeason]  = useState(Number(searchParams.get('season')  ?? 1))
 
   const fallbackToIframe = useCallback((idx: number, s: number, e: number) => {
     const servers = getFallbackServers(type)
-    const server = servers[idx] ?? servers[0]
+    if (idx >= servers.length) {
+      setStatus('error')
+      setStatusMsg('No working sources for this title.')
+      return
+    }
+    const server = servers[idx]
     setMode('iframe')
     setFallbackIdx(idx)
     setIframeSrc(embedUrl(type, mediaId, s, e, server.key))
     setStatus('loading')
     setStatusMsg(`Using ${server.label}`)
   }, [type, mediaId])
+
+  // Listen for the proxy's "fallback" postMessage and advance to the next server.
+  // The proxy emits this when it can't resolve a working upstream — much faster
+  // than client-side HEAD pre-flighting (which doubles latency).
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.data === 'rpgtv:proxy-failed' || e.data?.type === 'rpgtv:proxy-failed') {
+        const next = fallbackIdx + 1
+        const servers = getFallbackServers(type)
+        if (next < servers.length) {
+          fallbackToIframe(next, season, episode)
+        } else {
+          setStatus('error')
+          setStatusMsg('No working sources for this title.')
+        }
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [fallbackIdx, type, season, episode, fallbackToIframe])
 
   // Kick off on mount + episode change
   useEffect(() => {

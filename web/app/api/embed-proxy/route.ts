@@ -89,22 +89,41 @@ async function tmdbToImdb(type: 'movie' | 'tv', tmdbId: string): Promise<string 
 
 // ── Inner-iframe extraction ─────────────────────────────────────────────────
 function extractInnerIframe(html: string, baseUrl: string): string | null {
-  // Try a few patterns providers actually use:
-  //   <iframe id="player_iframe" src="...">
-  //   <iframe class="vds" src="...">
-  //   <iframe ... src="https://...vidsrc.../rcp/...">
   const iframes = Array.from(html.matchAll(/<iframe[^>]+src=["']([^"']+)["']/gi))
   if (!iframes.length) return null
 
   // Prefer iframes pointing at obvious player paths
-  const playerLike = iframes.find((m) => /rcp|player|src|embed|stream/i.test(m[1]))
+  const playerLike = iframes.find((m) => /rcp|player|srcrcp|cloudnestra|embed|stream/i.test(m[1]))
   const chosen = (playerLike ?? iframes[0])[1]
 
-  // Resolve relative URL against base
+  // Reject known "no content" placeholders that vidsrc/embed-su serve when they
+  // don't actually have the title (the user sees a CentOS Apache 404 inside).
+  if (!chosen || /not_found|notfound|\/error|about:blank/i.test(chosen)) return null
+
   try {
     return new URL(chosen, baseUrl).toString()
   } catch {
     return null
+  }
+}
+
+/**
+ * HEAD-probe the extracted inner URL with a short timeout. If it 404s or fails,
+ * we treat the source as "no content" and try the next provider.
+ * Some providers don't support HEAD — for those we accept any non-404 response.
+ */
+async function innerIsAlive(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url, {
+      method: 'HEAD',
+      headers: { 'User-Agent': UA, Referer: new URL(url).origin },
+      signal: AbortSignal.timeout(5000),
+      redirect: 'follow',
+    })
+    return r.status !== 404
+  } catch {
+    // Network error / timeout — assume it's alive; let the browser try.
+    return true
   }
 }
 
@@ -137,6 +156,46 @@ function wrapperPage(innerSrc: string, referer: string): string {
 </html>`
 }
 
+// ── Try a single source: fetch, extract inner iframe, verify it's alive ─────
+async function tryResolve(opts: {
+  source: string
+  type: 'movie' | 'tv'
+  imdb?: string
+  tmdb?: string
+  season?: number
+  episode?: number
+}): Promise<{ innerSrc: string; finalUrl: string } | null> {
+  const url = buildSourceUrl(opts)
+  if (!url) return null
+
+  let html: string
+  let finalUrl = url
+  try {
+    const upstream = await fetch(url, {
+      redirect: 'follow',
+      headers: {
+        'User-Agent': UA,
+        Referer: new URL(url).origin,
+        Accept: 'text/html,application/xhtml+xml,*/*',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    finalUrl = upstream.url || url
+    if (!upstream.ok) return null
+    html = await upstream.text()
+  } catch {
+    return null
+  }
+
+  const innerSrc = extractInnerIframe(html, finalUrl)
+  if (!innerSrc) return null
+
+  // Verify the inner URL doesn't 404
+  if (!(await innerIsAlive(innerSrc))) return null
+
+  return { innerSrc, finalUrl }
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -145,52 +204,45 @@ export async function GET(req: NextRequest) {
   const tmdb = searchParams.get('tmdb') ?? searchParams.get('id') ?? undefined
   const season = Number(searchParams.get('season') ?? 1)
   const episode = Number(searchParams.get('episode') ?? 1)
-  const source = searchParams.get('source') ?? 'vidsrc-in'
+  const preferred = searchParams.get('source') ?? 'vidsrc-me'
 
-  if (!tmdb) {
-    return new Response('Missing tmdb id', { status: 400 })
-  }
+  if (!tmdb) return new Response('Missing tmdb id', { status: 400 })
 
-  // Get IMDB id if we'll need it (vidsrc.in uses IMDB)
-  const imdb = source === 'vidsrc-in' ? await tmdbToImdb(type, tmdb) : null
+  // Build a server-side fallback chain: try preferred source first, then others
+  const allSources = ['vidsrc-me', 'embed-su', 'vidsrc-xyz', 'vidsrc-to']
+  const chain = [preferred, ...allSources.filter((s) => s !== preferred)]
 
-  const sourceUrl = buildSourceUrl({ source, type, imdb: imdb ?? undefined, tmdb, season, episode })
-  if (!sourceUrl) {
-    return new Response('Could not build source URL (missing IMDB?)', { status: 502 })
-  }
+  // IMDB id (vidsrc.me works better with IMDB for niche content)
+  const imdb = (await tmdbToImdb(type, tmdb)) ?? undefined
 
-  // Fetch upstream embed page (follow redirects — vidsrc.me → vidsrcme.ru)
-  let html: string
-  let finalUrl = sourceUrl
-  try {
-    const upstream = await fetch(sourceUrl, {
-      redirect: 'follow',
-      headers: {
-        'User-Agent': UA,
-        Referer: new URL(sourceUrl).origin,
-        Accept: 'text/html,application/xhtml+xml,*/*',
-      },
-      signal: AbortSignal.timeout(10000),
-    })
-    finalUrl = upstream.url || sourceUrl
-    if (!upstream.ok) {
-      return new Response(`Upstream ${upstream.status}`, { status: 502 })
+  for (const source of chain) {
+    const r = await tryResolve({ source, type, imdb, tmdb, season, episode })
+    if (r) {
+      return new Response(wrapperPage(r.innerSrc, r.finalUrl), {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'public, max-age=300',
+          'X-Proxy-Source': source,
+        },
+      })
     }
-    html = await upstream.text()
-  } catch (e) {
-    return new Response(`Fetch failed: ${e instanceof Error ? e.message : 'unknown'}`, { status: 502 })
   }
 
-  // Find the inner player iframe
-  const innerSrc = extractInnerIframe(html, finalUrl)
-  if (!innerSrc) {
-    // Fall back to wrapping the source URL itself — still gains sandbox isolation
-    return new Response(wrapperPage(finalUrl, finalUrl), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
-    })
-  }
-
-  return new Response(wrapperPage(innerSrc, finalUrl), {
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+  // Nothing worked. Return a tiny HTML page that immediately tells the parent
+  // window to advance to the next server — iframes can't surface HTTP errors,
+  // so we use postMessage instead. Status is still 502 for any non-browser
+  // clients.
+  const fallbackPage = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>No source</title>
+<style>html,body{margin:0;background:#000;color:#666;font:14px/1.4 system-ui;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:1rem}</style>
+</head><body>
+<div>
+<p>No source available — trying next server…</p>
+<script>try { window.parent.postMessage('rpgtv:proxy-failed', '*'); } catch(_) {}</script>
+</div>
+</body></html>`
+  return new Response(fallbackPage, {
+    status: 502,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
 }
