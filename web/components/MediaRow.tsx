@@ -32,13 +32,15 @@ export default function MediaRow({ title, items, mediaType, size = 'md' }: Props
         <div className="flex gap-1">
           <button
             onClick={() => scroll('left')}
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-gray-400 hover:text-white"
+            aria-label={`Scroll ${title} left`}
+            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 focus-visible:bg-white/20 transition-colors text-gray-400 hover:text-white focus-visible:text-white"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => scroll('right')}
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-gray-400 hover:text-white"
+            aria-label={`Scroll ${title} right`}
+            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 focus-visible:bg-white/20 transition-colors text-gray-400 hover:text-white focus-visible:text-white"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -47,6 +49,7 @@ export default function MediaRow({ title, items, mediaType, size = 'md' }: Props
 
       <div
         ref={rowRef}
+        data-tv-row
         className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 px-4 sm:px-6"
       >
         {items.map((item) => (

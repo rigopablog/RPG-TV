@@ -4,6 +4,7 @@ import './videojs.css'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import PopupBlocker from '@/components/PopupBlocker'
+import TVModeDetector from '@/components/TVModeDetector'
 
 export const metadata: Metadata = {
   title: {
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-cs-dark text-white min-h-screen flex flex-col">
         <PopupBlocker />
+        <TVModeDetector />
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />

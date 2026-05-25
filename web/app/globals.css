@@ -46,9 +46,76 @@ body {
 .transition-all { transition: all 0.3s ease; }
 
 /* Card hover glow */
-.card-glow:hover {
+.card-glow:hover,
+.card-glow:focus-visible,
+.group:focus-visible .card-glow,
+.group:focus-within .card-glow {
   box-shadow: 0 0 24px rgba(229, 9, 20, 0.25);
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * TV remote support
+ *
+ * Smart TVs and consoles drive focus via a D-pad — no mouse, no hover.
+ * We need:
+ *   1. A focus ring on EVERY interactive element that's actually visible
+ *      from the couch (TVs sit ~3m away; subtle 1px outlines are invisible).
+ *   2. Every hover-only visual to also fire on :focus / :focus-visible /
+ *      :focus-within (overlay buttons inside cards, etc.).
+ *   3. A `.tv-mode` body class we add on the first arrow-key press, so we
+ *      can make the focus ring even thicker on TVs without bothering
+ *      desktop mouse users.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/* Universal :focus-visible — works for keyboard tab, D-pad, screen-reader. */
+:focus { outline: none; }
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #E50914;
+  outline-offset: 3px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+/* Cards: the focus ring belongs on the inner poster wrapper, not the outer
+ * <a> (which is `display:block flex-shrink:0`). Scoped overrides below. */
+.media-card:focus-visible {
+  outline: none;
+}
+.media-card:focus-visible .media-card-inner {
+  outline: 4px solid #E50914;
+  outline-offset: 4px;
+  transform: scale(1.04);
+  z-index: 10;
+}
+
+/* TV mode = thicker, higher-contrast ring */
+body.tv-mode a:focus-visible,
+body.tv-mode button:focus-visible,
+body.tv-mode [tabindex]:focus-visible {
+  outline-width: 4px;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px rgba(229, 9, 20, 0.18);
+}
+body.tv-mode .media-card:focus-visible .media-card-inner {
+  outline-width: 6px;
+  box-shadow: 0 0 0 12px rgba(229, 9, 20, 0.20);
+}
+
+/* Disable text selection in tv-mode (looks bad on remote nav) */
+body.tv-mode {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: none; /* TVs don't have a cursor */
+}
+
+/* On TV, scroll behavior should NOT animate (smooth scroll is jittery
+ * on lower-end TV browsers) — actually keep it for ergonomics. */
+html { scroll-behavior: smooth; }
 
 /* Gradient overlays */
 .hero-gradient {

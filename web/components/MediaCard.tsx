@@ -69,9 +69,13 @@ export default function MediaCard({ item, mediaType, size = 'md' }: Props) {
   const posterUrl = imgUrl(item.poster_path, 'w342')
 
   return (
-    <Link href={`/${type}/${item.id}`} className="group block flex-shrink-0">
+    <Link
+      href={`/${type}/${item.id}`}
+      className="media-card group block flex-shrink-0"
+      aria-label={`${title} (${type === 'movie' ? 'movie' : 'TV show'})`}
+    >
       <div
-        className={`${sizeClasses[size]} relative rounded-xl overflow-hidden card-glow transition-all duration-300 group-hover:scale-105 group-hover:z-10`}
+        className={`media-card-inner ${sizeClasses[size]} relative rounded-xl overflow-hidden card-glow transition-all duration-300 group-hover:scale-105 group-focus-within:scale-105 group-hover:z-10 group-focus-within:z-10`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -92,10 +96,10 @@ export default function MediaCard({ item, mediaType, size = 'md' }: Props) {
             </div>
           )}
 
-          {/* Overlay on hover */}
+          {/* Overlay on hover or D-pad focus */}
           <div
-            className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 ${
-              hovered ? 'opacity-100' : 'opacity-0 sm:opacity-0'
+            className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 group-focus-within:opacity-100 ${
+              hovered ? 'opacity-100' : 'opacity-0'
             }`}
           >
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Play, Info, Star, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -20,10 +20,30 @@ export default function Hero({ items }: Props) {
   const next = useCallback(() => setIdx((i) => (i + 1) % featured.length), [featured.length])
   const prev = useCallback(() => setIdx((i) => (i - 1 + featured.length) % featured.length), [featured.length])
 
+  const sectionRef = useRef<HTMLElement>(null)
+  const [paused, setPaused] = useState(false)
   useEffect(() => {
+    if (paused) return
     const t = setInterval(next, 8000)
     return () => clearInterval(t)
-  }, [next])
+  }, [next, paused])
+
+  // Pause auto-rotate when keyboard / D-pad focus enters the hero — gives
+  // TV users time to read the description before it advances.
+  useEffect(() => {
+    const node = sectionRef.current
+    if (!node) return
+    const onFocusIn = () => setPaused(true)
+    const onFocusOut = (e: FocusEvent) => {
+      if (!node.contains(e.relatedTarget as Node | null)) setPaused(false)
+    }
+    node.addEventListener('focusin', onFocusIn)
+    node.addEventListener('focusout', onFocusOut)
+    return () => {
+      node.removeEventListener('focusin', onFocusIn)
+      node.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
 
   const [inList, setInList] = useState(false)
   useEffect(() => {
@@ -59,7 +79,10 @@ export default function Hero({ items }: Props) {
   }
 
   return (
-    <section className="relative h-[75vh] min-h-[500px] max-h-[800px] overflow-hidden">
+    <section
+      ref={sectionRef}
+      className="relative h-[75vh] min-h-[500px] max-h-[800px] overflow-hidden"
+    >
       {/* Backdrop */}
       <div className="absolute inset-0">
         {backdropUrl && (
@@ -141,13 +164,15 @@ export default function Hero({ items }: Props) {
         {/* Carousel controls */}
         <button
           onClick={prev}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white transition-all backdrop-blur-sm"
+          aria-label="Previous featured title"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 focus-visible:bg-black/70 text-white transition-all backdrop-blur-sm"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
         <button
           onClick={next}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white transition-all backdrop-blur-sm"
+          aria-label="Next featured title"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 focus-visible:bg-black/70 text-white transition-all backdrop-blur-sm"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
@@ -159,8 +184,10 @@ export default function Hero({ items }: Props) {
           <button
             key={i}
             onClick={() => setIdx(i)}
+            aria-label={`Go to slide ${i + 1} of ${featured.length}`}
+            aria-current={i === idx ? 'true' : undefined}
             className={`rounded-full transition-all ${
-              i === idx ? 'w-6 h-2 bg-cs-red' : 'w-2 h-2 bg-white/40 hover:bg-white/70'
+              i === idx ? 'w-6 h-2 bg-cs-red' : 'w-2 h-2 bg-white/40 hover:bg-white/70 focus-visible:bg-white/70'
             }`}
           />
         ))}
