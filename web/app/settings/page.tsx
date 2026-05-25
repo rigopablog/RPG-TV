@@ -171,6 +171,11 @@ export default function SettingsPage() {
             gives you direct CDN URLs from cached torrents — same content, zero ads,
             often 4K with multi-audio.
           </div>
+          <div className="mt-2 p-3 bg-green-900/20 border border-green-500/30 rounded-lg text-xs text-green-200">
+            <strong>TV shows already ad-free.</strong> Our sandboxed proxy strips popups
+            from TV embeds — no RD token needed. Real-Debrid is only required for
+            ad-free movies.
+          </div>
         </div>
       </div>
     </div>
