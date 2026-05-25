@@ -1,0 +1,144 @@
+/* ── RPG TV skin for Video.js ──────────────────────────────────────────────── */
+
+/* Container */
+.vjs-rpgtv.video-js {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Big play button */
+.vjs-rpgtv .vjs-big-play-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid #E50914;
+  background: rgba(229, 9, 20, 0.25);
+  top: 50%;
+  left: 50%;
+  margin-top: -36px;
+  margin-left: -36px;
+  line-height: 66px;
+  font-size: 28px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+.vjs-rpgtv:hover .vjs-big-play-button,
+.vjs-rpgtv .vjs-big-play-button:hover {
+  background: rgba(229, 9, 20, 0.7);
+  transform: scale(1.08);
+  border-color: #fff;
+}
+.vjs-rpgtv .vjs-big-play-button .vjs-icon-placeholder::before {
+  font-size: 28px;
+  line-height: 66px;
+}
+
+/* Control bar */
+.vjs-rpgtv .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
+  height: 52px;
+  padding: 0 8px;
+  align-items: center;
+}
+
+/* Progress bar */
+.vjs-rpgtv .vjs-progress-control {
+  position: absolute;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 4px;
+  padding: 0;
+}
+.vjs-rpgtv .vjs-progress-holder {
+  height: 4px;
+  margin: 0;
+}
+.vjs-rpgtv .vjs-play-progress,
+.vjs-rpgtv .vjs-volume-level {
+  background: #E50914;
+}
+.vjs-rpgtv .vjs-play-progress::before {
+  color: #E50914;
+  font-size: 14px;
+  top: -5px;
+}
+.vjs-rpgtv .vjs-load-progress {
+  background: rgba(255,255,255,0.15);
+}
+.vjs-rpgtv .vjs-slider {
+  background: rgba(255,255,255,0.1);
+}
+
+/* Buttons */
+.vjs-rpgtv .vjs-button > .vjs-icon-placeholder::before {
+  font-size: 20px;
+  line-height: 52px;
+}
+.vjs-rpgtv .vjs-control:focus,
+.vjs-rpgtv .vjs-control:hover {
+  color: #E50914;
+  text-shadow: none;
+}
+
+/* Time display */
+.vjs-rpgtv .vjs-time-control {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 52px;
+  padding: 0 4px;
+}
+.vjs-rpgtv .vjs-current-time { color: #fff; }
+.vjs-rpgtv .vjs-time-divider { color: #666; }
+.vjs-rpgtv .vjs-duration { color: #999; }
+
+/* Volume */
+.vjs-rpgtv .vjs-volume-panel {
+  width: auto;
+}
+.vjs-rpgtv .vjs-volume-bar {
+  margin: 1.5em 0.5em;
+}
+
+/* Captions/subtitles menu */
+.vjs-rpgtv .vjs-menu-button-popup .vjs-menu .vjs-menu-content {
+  background: rgba(10,10,26,0.97);
+  border: 1px solid rgba(229,9,20,0.3);
+  border-radius: 8px;
+  bottom: 48px;
+  padding: 4px;
+}
+.vjs-rpgtv .vjs-menu li {
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 4px;
+}
+.vjs-rpgtv .vjs-menu li.vjs-selected,
+.vjs-rpgtv .vjs-menu li:hover {
+  background: rgba(229,9,20,0.2);
+  color: #E50914;
+}
+
+/* Loading spinner */
+.vjs-rpgtv .vjs-loading-spinner {
+  border-color: #E50914;
+}
+.vjs-rpgtv .vjs-loading-spinner::before,
+.vjs-rpgtv .vjs-loading-spinner::after {
+  border-top-color: #E50914;
+}
+
+/* Poster */
+.vjs-rpgtv .vjs-poster {
+  background-size: cover;
+}
+
+/* Error display */
+.vjs-rpgtv .vjs-error-display .vjs-modal-dialog-content {
+  background: rgba(10,10,26,0.9);
+  color: #E50914;
+  font-size: 14px;
+}

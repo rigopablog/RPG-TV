@@ -9,7 +9,9 @@ build/
 .idea/
 *.iml
 app/
+!web/app/
 src/
+!web/src/
 local.properties
 gradle/
 gradlew
