@@ -127,20 +127,20 @@ async function innerIsAlive(url: string): Promise<boolean> {
     })
     if (r.status === 404) return false
 
-    // Peek at the first 1 KB to detect false-positive 200s that are really
-    // error pages (Apache "Not Found", nginx "404 Not Found", etc.)
+    // Peek at the response body to detect false-positive 200s that are really
+    // Apache/nginx default error pages. These have a very specific signature:
+    //   <h1>Not Found</h1>... <address>Apache/X.Y.Z (...) Server at ... Port N</address>
+    // We require BOTH the "<h1>Not Found</h1>" AND the "<address>...Server at"
+    // signature so we never false-positive on real player pages.
     const raw = await r.text()
-    const peek = raw.slice(0, 1024).toLowerCase()
+    const lower = raw.toLowerCase()
 
-    // Apache/nginx error page heuristic — real player pages never match this.
-    const isErrorPage =
-      (peek.includes('not found') || peek.includes('404 error') || peek.includes('object not found')) &&
-      (peek.includes('apache') || peek.includes('nginx') || peek.includes('server at'))
+    const isApacheErrorPage =
+      lower.includes('<h1>not found</h1>') &&
+      lower.includes('<address>') &&
+      /server at .*port \d+/i.test(raw)
 
-    // Blank page or near-empty response also means no content.
-    const isEmpty = raw.trim().length < 50
-
-    return !isErrorPage && !isEmpty
+    return !isApacheErrorPage
   } catch {
     // Network error / timeout — assume it's alive; let the browser try.
     return true
@@ -206,14 +206,6 @@ async function tryResolve(opts: {
   } catch {
     return null
   }
-
-  // If the outer embed page itself is an error page (e.g. the provider has no
-  // record of this title), bail early before we even try to parse it.
-  const outerPeek = html.slice(0, 1024).toLowerCase()
-  const outerIsError =
-    (outerPeek.includes('not found') || outerPeek.includes('404')) &&
-    (outerPeek.includes('apache') || outerPeek.includes('server at') || outerPeek.includes('nginx'))
-  if (outerIsError) return null
 
   const innerSrc = extractInnerIframe(html, finalUrl)
   if (!innerSrc) return null
