@@ -98,7 +98,7 @@ function extractInnerIframe(html: string, baseUrl: string): string | null {
 
   // Reject known "no content" placeholders that vidsrc/embed-su serve when they
   // don't actually have the title (the user sees a CentOS Apache 404 inside).
-  if (!chosen || /not_found|notfound|\/error|about:blank/i.test(chosen)) return null
+  if (!chosen || /not_found|notfound|\/error|about:blank|\/404|\/unavailable/i.test(chosen)) return null
 
   try {
     return new URL(chosen, baseUrl).toString()
@@ -108,19 +108,39 @@ function extractInnerIframe(html: string, baseUrl: string): string | null {
 }
 
 /**
- * HEAD-probe the extracted inner URL with a short timeout. If it 404s or fails,
- * we treat the source as "no content" and try the next provider.
- * Some providers don't support HEAD — for those we accept any non-404 response.
+ * Probe the extracted inner URL with a short timeout. If it 404s or returns
+ * an Apache/nginx "Not Found" error page (often served as HTTP 200 by piracy
+ * hosts), we treat the source as "no content" and try the next provider.
+ *
+ * We do a GET and peek at the first 1 KB of the body because some providers
+ * (Apache/2.2.x CentOS) serve their error pages with a 200 status — a plain
+ * HEAD check would wrongly pass them through and the user would see the
+ * "Not Found" page inside the player.
  */
 async function innerIsAlive(url: string): Promise<boolean> {
   try {
     const r = await fetch(url, {
-      method: 'HEAD',
+      method: 'GET',
       headers: { 'User-Agent': UA, Referer: new URL(url).origin },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
       redirect: 'follow',
     })
-    return r.status !== 404
+    if (r.status === 404) return false
+
+    // Peek at the first 1 KB to detect false-positive 200s that are really
+    // error pages (Apache "Not Found", nginx "404 Not Found", etc.)
+    const raw = await r.text()
+    const peek = raw.slice(0, 1024).toLowerCase()
+
+    // Apache/nginx error page heuristic — real player pages never match this.
+    const isErrorPage =
+      (peek.includes('not found') || peek.includes('404 error') || peek.includes('object not found')) &&
+      (peek.includes('apache') || peek.includes('nginx') || peek.includes('server at'))
+
+    // Blank page or near-empty response also means no content.
+    const isEmpty = raw.trim().length < 50
+
+    return !isErrorPage && !isEmpty
   } catch {
     // Network error / timeout — assume it's alive; let the browser try.
     return true
@@ -186,6 +206,14 @@ async function tryResolve(opts: {
   } catch {
     return null
   }
+
+  // If the outer embed page itself is an error page (e.g. the provider has no
+  // record of this title), bail early before we even try to parse it.
+  const outerPeek = html.slice(0, 1024).toLowerCase()
+  const outerIsError =
+    (outerPeek.includes('not found') || outerPeek.includes('404')) &&
+    (outerPeek.includes('apache') || outerPeek.includes('server at') || outerPeek.includes('nginx'))
+  if (outerIsError) return null
 
   const innerSrc = extractInnerIframe(html, finalUrl)
   if (!innerSrc) return null
