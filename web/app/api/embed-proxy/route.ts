@@ -152,6 +152,13 @@ function wrapperPage(innerSrc: string, referer: string): string {
   // Browser will sandbox the inner iframe: no popups, no top-nav, no extra windows.
   // The inner page can still run scripts to play the video (allow-scripts) and
   // talk to its own origin's APIs (allow-same-origin).
+  //
+  // Client-side health check (belt-and-suspenders for server-side detection):
+  // Real player pages always emit postMessage events (analytics, ready signals,
+  // ad framework messages, etc). Static error pages (Apache "Not Found",
+  // upstream-removed-content pages) emit nothing because they have no JS.
+  // If we receive ZERO messages within 6s of iframe load, treat it as a dead
+  // source and tell the parent to advance to the next server.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -166,12 +173,44 @@ function wrapperPage(innerSrc: string, referer: string): string {
 </head>
 <body>
 <iframe
+  id="player"
   src="${innerSrc.replace(/"/g, '&quot;')}"
   sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock"
   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
   allowfullscreen
   referrerpolicy="origin"
 ></iframe>
+<script>
+(function () {
+  var iframe = document.getElementById('player');
+  var heardFromIframe = false;
+  var failed = false;
+
+  // Any postMessage from the inner iframe (analytics, ready, ad events, etc)
+  // counts as proof of life. Real players emit these within ~1-2 seconds.
+  window.addEventListener('message', function (e) {
+    if (e.source === iframe.contentWindow) heardFromIframe = true;
+  });
+
+  function reportFailure() {
+    if (failed) return;
+    failed = true;
+    try { window.parent.postMessage('rpgtv:proxy-failed', '*'); } catch (_) {}
+  }
+
+  iframe.addEventListener('load', function () {
+    // 6 seconds is enough for any real player to emit at least one message.
+    setTimeout(function () {
+      if (!heardFromIframe) reportFailure();
+    }, 6000);
+  });
+
+  // Hard ceiling: if the iframe never even fires onload within 12s, fail anyway.
+  setTimeout(function () {
+    if (!heardFromIframe) reportFailure();
+  }, 12000);
+})();
+</script>
 </body>
 </html>`
 }
