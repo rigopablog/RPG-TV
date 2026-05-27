@@ -175,8 +175,8 @@ function wrapperPage(innerSrc: string, referer: string): string {
 <iframe
   id="player"
   src="${innerSrc.replace(/"/g, '&quot;')}"
-  sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+  sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock allow-forms allow-modals"
+  allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; clipboard-write; web-share"
   allowfullscreen
   referrerpolicy="origin"
 ></iframe>
