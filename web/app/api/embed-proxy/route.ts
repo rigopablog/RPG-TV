@@ -138,6 +138,22 @@ function wrapperPage(innerSrc: string, referer: string): string {
   // Browser will sandbox the inner iframe: no popups, no top-nav, no extra windows.
   // The inner page can still run scripts to play the video (allow-scripts) and
   // talk to its own origin's APIs (allow-same-origin).
+  //
+  // Dead-source detection. Some upstream providers serve an Apache/CentOS
+  // "Not Found" page (or get redirected to /not_found by cloudnestra) for
+  // titles they don't actually have. We catch this on the client by checking
+  // TWO cheap signals after the iframe finishes loading:
+  //
+  //   1. iframe.contentWindow.length — the number of nested frames inside.
+  //      Real player pages always have 1+ (video element wrapper, ads,
+  //      trackers, etc.). Static Apache error pages have 0.
+  //   2. Whether the iframe has emitted any postMessage events. Real players
+  //      send analytics/ready/ad-framework messages within 1-2 seconds;
+  //      static HTML pages send nothing.
+  //
+  // We require BOTH to indicate failure (no nested frames AND no postMessage)
+  // before bailing — that way we never false-positive on a quiet but valid
+  // player.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,12 +168,53 @@ function wrapperPage(innerSrc: string, referer: string): string {
 </head>
 <body>
 <iframe
+  id="player"
   src="${innerSrc.replace(/"/g, '&quot;')}"
   sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock"
   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
   allowfullscreen
   referrerpolicy="no-referrer"
 ></iframe>
+<script>
+(function () {
+  var iframe = document.getElementById('player');
+  var heardFromIframe = false;
+  var failed = false;
+
+  // Track any postMessage emitted by the inner iframe (real players do this).
+  window.addEventListener('message', function (e) {
+    try { if (e.source === iframe.contentWindow) heardFromIframe = true; } catch (_) {}
+  });
+
+  function reportFailure(reason) {
+    if (failed) return;
+    failed = true;
+    try { window.parent.postMessage('rpgtv:proxy-failed', '*'); } catch (_) {}
+  }
+
+  function probe() {
+    if (failed) return;
+    var nested = -1;
+    try { nested = iframe.contentWindow.length; } catch (_) {}
+    // Both signals say dead — advance.
+    if (nested === 0 && !heardFromIframe) {
+      reportFailure('no-frames-no-messages');
+    }
+  }
+
+  iframe.addEventListener('load', function () {
+    // First probe at 3s — enough time for a real player to spin up its
+    // nested frames and emit at least one analytics ping.
+    setTimeout(probe, 3000);
+    // Second probe at 7s as a backstop for slow connections.
+    setTimeout(probe, 7000);
+  });
+
+  // Hard ceiling: if the iframe never even fires onload within 15s,
+  // give up. Stalled DNS / TCP / TLS — the user will see "trying next server".
+  setTimeout(function () { if (!heardFromIframe) reportFailure('onload-never-fired'); }, 15000);
+})();
+</script>
 </body>
 </html>`
 }
