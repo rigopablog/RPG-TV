@@ -27,6 +27,9 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // ── Source URL builders ────────────────────────────────────────────────────
 // NB: vidsrc.in 404s as of May 2026; vidsrc.me redirects to vidsrcme.ru and is alive.
+// `lang` is a 2-letter language hint (e.g. 'es', 'en') — most providers honor
+// it as the default subtitle/dub language via `?ds_lang=` (vidsrc family) or
+// equivalent. Falls back gracefully if the provider ignores it.
 function buildSourceUrl(opts: {
   source: string
   type: 'movie' | 'tv'
@@ -34,35 +37,38 @@ function buildSourceUrl(opts: {
   tmdb?: string
   season?: number
   episode?: number
+  lang?: string
 }): string | null {
-  const { source, type, imdb, tmdb, season = 1, episode = 1 } = opts
+  const { source, type, imdb, tmdb, season = 1, episode = 1, lang } = opts
+  const langQs = lang ? `&ds_lang=${lang}` : ''
   switch (source) {
     case 'vidsrc-me':
     case 'vidsrc-in': // legacy alias — routes to vidsrc.me now
       if (imdb) {
         return type === 'movie'
-          ? `https://vidsrc.me/embed/movie?imdb=${imdb}`
-          : `https://vidsrc.me/embed/tv?imdb=${imdb}&season=${season}&episode=${episode}`
+          ? `https://vidsrc.me/embed/movie?imdb=${imdb}${langQs}`
+          : `https://vidsrc.me/embed/tv?imdb=${imdb}&season=${season}&episode=${episode}${langQs}`
       }
       if (!tmdb) return null
       return type === 'movie'
-        ? `https://vidsrc.me/embed/movie?tmdb=${tmdb}`
-        : `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}`
+        ? `https://vidsrc.me/embed/movie?tmdb=${tmdb}${langQs}`
+        : `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}${langQs}`
     case 'vidsrc-xyz':
       if (!tmdb) return null
       return type === 'movie'
-        ? `https://vidsrc.xyz/embed/movie?tmdb=${tmdb}`
-        : `https://vidsrc.xyz/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}`
+        ? `https://vidsrc.xyz/embed/movie?tmdb=${tmdb}${langQs}`
+        : `https://vidsrc.xyz/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}${langQs}`
     case 'vidsrc-to':
       if (!tmdb) return null
       return type === 'movie'
-        ? `https://vidsrc.to/embed/movie/${tmdb}`
-        : `https://vidsrc.to/embed/tv/${tmdb}/${season}/${episode}`
+        ? `https://vidsrc.to/embed/movie/${tmdb}${lang ? `?ds_lang=${lang}` : ''}`
+        : `https://vidsrc.to/embed/tv/${tmdb}/${season}/${episode}${lang ? `?ds_lang=${lang}` : ''}`
     case 'embed-su':
       if (!tmdb) return null
+      // embed.su uses a different param convention; pass via hash fragment.
       return type === 'movie'
-        ? `https://embed.su/embed/movie/${tmdb}`
-        : `https://embed.su/embed/tv/${tmdb}/${season}/${episode}`
+        ? `https://embed.su/embed/movie/${tmdb}${lang ? `?lang=${lang}` : ''}`
+        : `https://embed.su/embed/tv/${tmdb}/${season}/${episode}${lang ? `?lang=${lang}` : ''}`
     default:
       return null
   }
@@ -164,6 +170,7 @@ async function tryResolve(opts: {
   tmdb?: string
   season?: number
   episode?: number
+  lang?: string
 }): Promise<{ innerSrc: string; finalUrl: string } | null> {
   const url = buildSourceUrl(opts)
   if (!url) return null
@@ -205,6 +212,12 @@ export async function GET(req: NextRequest) {
   const season = Number(searchParams.get('season') ?? 1)
   const episode = Number(searchParams.get('episode') ?? 1)
   const preferred = searchParams.get('source') ?? 'vidsrc-me'
+  // Preferred player audio/subtitle language. Source: ?lang= query param if set,
+  // else the rpg_lang cookie set by the client. 2-letter code ('en', 'es').
+  const lang =
+    searchParams.get('lang') ??
+    req.cookies.get('rpg_lang')?.value ??
+    undefined
 
   if (!tmdb) return new Response('Missing tmdb id', { status: 400 })
 
@@ -216,7 +229,7 @@ export async function GET(req: NextRequest) {
   const imdb = (await tmdbToImdb(type, tmdb)) ?? undefined
 
   for (const source of chain) {
-    const r = await tryResolve({ source, type, imdb, tmdb, season, episode })
+    const r = await tryResolve({ source, type, imdb, tmdb, season, episode, lang })
     if (r) {
       return new Response(wrapperPage(r.innerSrc, r.finalUrl), {
         headers: {

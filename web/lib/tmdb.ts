@@ -37,9 +37,42 @@ function buildUrl(endpoint: string, params: Record<string, string> = {}) {
   return url.toString()
 }
 
+/**
+ * Read the user's preferred TMDB language code at request time.
+ * - Server side: reads the `rpg_lang` cookie set by the client.
+ * - Client side: reads localStorage.
+ * Falls back to en-US if nothing is set.
+ *
+ * Caller can override with an explicit `language` key in params.
+ */
+function detectLang(): string {
+  // Client side
+  if (typeof window !== 'undefined') {
+    try {
+      const v = localStorage.getItem('rpg_lang')
+      return v === 'es' ? 'es-MX' : 'en-US'
+    } catch { return 'en-US' }
+  }
+  // Server side — try cookies via next/headers (only available in Server Components)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { cookies } = require('next/headers') as typeof import('next/headers')
+    const c = cookies().get('rpg_lang')?.value
+    return c === 'es' ? 'es-MX' : 'en-US'
+  } catch {
+    return 'en-US'
+  }
+}
+
 async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
+  // Auto-attach language unless caller already provided one.
+  if (!params.language) {
+    params = { ...params, language: detectLang() }
+  }
   const res = await fetch(buildUrl(endpoint, params), {
     headers: getHeaders(),
+    // Bypass cache when language differs from default — language is part of the URL,
+    // so Next's cache will key on it correctly. revalidate keeps it warm for an hour.
     next: { revalidate: 3600 },
   })
   if (!res.ok) throw new Error(`TMDB ${res.status}: ${endpoint}`)

@@ -4,8 +4,15 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { Search, Bookmark, Bell, Menu, X, Play, Film, Tv, Settings } from 'lucide-react'
+import { useT } from '@/lib/i18n'
+import { syncLangCookie } from '@/lib/storage'
 
 export default function Navbar() {
+  const { t } = useT()
+
+  // Ensure the rpg_lang cookie matches localStorage on mount so server-rendered
+  // TMDB content uses the right language even on a fresh session.
+  useEffect(() => { syncLangCookie() }, [])
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -39,11 +46,11 @@ export default function Navbar() {
   }
 
   const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/movies', label: 'Movies' },
-    { href: '/shows', label: 'TV Shows' },
-    { href: '/watchlist', label: 'Watchlist' },
-    { href: '/settings', label: 'Settings' },
+    { href: '/', label: t('nav.home') },
+    { href: '/movies', label: t('nav.movies') },
+    { href: '/shows', label: t('nav.tvShows') },
+    { href: '/watchlist', label: t('nav.watchlist') },
+    { href: '/settings', label: t('nav.settings') },
   ]
 
   return (
@@ -88,7 +95,7 @@ export default function Navbar() {
                   ref={inputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search movies, shows..."
+                  placeholder={t('common.search')}
                   className="w-64 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-cs-red transition-all"
                 />
                 <button
@@ -112,7 +119,7 @@ export default function Navbar() {
           <Link
             href="/watchlist"
             className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/10"
-            title="Watchlist"
+            title={t('nav.watchlist')}
           >
             <Bookmark className="w-5 h-5" />
           </Link>
@@ -120,7 +127,7 @@ export default function Navbar() {
           <Link
             href="/settings"
             className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/10"
-            title="Settings"
+            title={t('nav.settings')}
           >
             <Settings className="w-5 h-5" />
           </Link>

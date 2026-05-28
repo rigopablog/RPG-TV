@@ -4,6 +4,9 @@ const WATCHLIST_KEY = 'cs_watchlist'
 const CONTINUE_KEY = 'cs_continue'
 const FAVORITES_KEY = 'cs_favorites'
 const RD_KEY = 'rpg_rd_token'
+const LANG_KEY = 'rpg_lang'
+
+export type AppLang = 'en' | 'es'
 
 function safeParse<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -97,4 +100,39 @@ export function setRDToken(token: string) {
 export function clearRDToken() {
   if (typeof window === 'undefined') return
   try { localStorage.removeItem(RD_KEY) } catch {}
+}
+
+// ── Language preference ───────────────────────────────────
+// 'en' = English (UI + TMDB metadata in en-US, player tries English audio)
+// 'es' = Latin American Spanish (UI + TMDB in es-MX, player tries Spanish audio)
+export function getLang(): AppLang {
+  if (typeof window === 'undefined') return 'en'
+  try {
+    const v = localStorage.getItem(LANG_KEY)
+    return v === 'es' ? 'es' : 'en'
+  } catch { return 'en' }
+}
+export function setLang(lang: AppLang) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(LANG_KEY, lang)
+    // Mirror to a cookie so server components (TMDB calls) can read it too.
+    // 1 year expiry, path=/ so every route sees it.
+    document.cookie = `rpg_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`
+    // Notify other tabs/components
+    window.dispatchEvent(new CustomEvent('rpg:lang-changed', { detail: lang }))
+  } catch {}
+}
+
+/**
+ * Call once on app mount to ensure the cookie matches localStorage.
+ * Needed because the cookie is the source of truth for server-rendered
+ * TMDB calls, but the language preference lives in localStorage.
+ */
+export function syncLangCookie() {
+  if (typeof window === 'undefined') return
+  const lang = getLang()
+  try {
+    document.cookie = `rpg_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`
+  } catch {}
 }

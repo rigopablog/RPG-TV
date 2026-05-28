@@ -8,7 +8,8 @@ import {
   Info, Loader2, Wifi, WifiOff, MonitorPlay, LayoutList,
 } from 'lucide-react'
 import { getMovieDetails, getShowDetails, getSeasonDetails } from '@/lib/tmdb'
-import { updateContinueWatching, getRDToken } from '@/lib/storage'
+import { updateContinueWatching, getRDToken, getLang } from '@/lib/storage'
+import { embedLang } from '@/lib/i18n'
 import type { TMDBShow, Episode } from '@/types/tmdb'
 import VideoPlayer, { type VSource, type VSubtitle } from '@/components/VideoPlayer'
 
@@ -18,7 +19,11 @@ import VideoPlayer, { type VSource, type VSubtitle } from '@/components/VideoPla
 // TV embeds; for movies the ads often fire from inside the inner iframe, so
 // proxy doesn't help — use Real-Debrid for those.
 function embedUrl(type: string, id: number, s: number, e: number, server: string) {
-  const qs = new URLSearchParams({ type, tmdb: String(id), season: String(s), episode: String(e) })
+  // Preferred audio/subtitle language from the user's Settings — passed as ds_lang
+  // (vidsrc family) or lang (embed.su / 2embed). Providers fall back to default if
+  // they don't support the param.
+  const lang = embedLang(getLang())
+  const qs = new URLSearchParams({ type, tmdb: String(id), season: String(s), episode: String(e), lang })
   switch (server) {
     case 'proxy-vidsrc':
       qs.set('source', 'vidsrc-me')
@@ -28,20 +33,20 @@ function embedUrl(type: string, id: number, s: number, e: number, server: string
       return `/api/embed-proxy?${qs}`
     case 'vidsrc-xyz':
       return type === 'movie'
-        ? `https://vidsrc.xyz/embed/movie?tmdb=${id}`
-        : `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`
+        ? `https://vidsrc.xyz/embed/movie?tmdb=${id}&ds_lang=${lang}`
+        : `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}&ds_lang=${lang}`
     case 'embed-su':
       return type === 'movie'
-        ? `https://embed.su/embed/movie/${id}`
-        : `https://embed.su/embed/tv/${id}/${s}/${e}`
+        ? `https://embed.su/embed/movie/${id}?lang=${lang}`
+        : `https://embed.su/embed/tv/${id}/${s}/${e}?lang=${lang}`
     case '2embed':
       return type === 'movie'
-        ? `https://www.2embed.cc/embed/${id}`
-        : `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
+        ? `https://www.2embed.cc/embed/${id}?lang=${lang}`
+        : `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}&lang=${lang}`
     default: // vidsrc-to (raw, full ads)
       return type === 'movie'
-        ? `https://vidsrc.to/embed/movie/${id}`
-        : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+        ? `https://vidsrc.to/embed/movie/${id}?ds_lang=${lang}`
+        : `https://vidsrc.to/embed/tv/${id}/${s}/${e}?ds_lang=${lang}`
   }
 }
 
