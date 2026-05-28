@@ -210,9 +210,17 @@ function wrapperPage(innerSrc: string, referer: string): string {
     setTimeout(probe, 7000);
   });
 
-  // Hard ceiling: if the iframe never even fires onload within 15s,
-  // give up. Stalled DNS / TCP / TLS — the user will see "trying next server".
-  setTimeout(function () { if (!heardFromIframe) reportFailure('onload-never-fired'); }, 15000);
+  // Network-level failure (DNS fail, TLS fail, connection reset, malformed
+  // HTTP response — e.g. cloudnestra "invalid response"). Fires before
+  // onload so we can advance to the next server in milliseconds rather
+  // than waiting on the timeout backstop.
+  iframe.addEventListener('error', function () {
+    reportFailure('iframe-error');
+  });
+
+  // Backstop: if the iframe never fires onload within 8s, assume the
+  // upstream is dead (stalled DNS / TCP / TLS) and advance.
+  setTimeout(function () { if (!heardFromIframe) reportFailure('onload-never-fired'); }, 8000);
 })();
 </script>
 </body>
