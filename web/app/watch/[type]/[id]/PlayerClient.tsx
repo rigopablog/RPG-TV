@@ -56,8 +56,8 @@ const TV_SERVERS = [
 ]
 const MOVIE_SERVERS = [
   { key: 'proxy-vidsrc',    label: 'Server 1 (ad-free)' },
-  { key: 'vidsrc-to',       label: 'Server 2' },
-  { key: 'embed-su',        label: 'Server 3' },
+  { key: 'proxy-embed-su',  label: 'Server 2 (ad-free)' },
+  { key: 'vidsrc-to',       label: 'Server 3' },
   { key: '2embed',          label: 'Server 4' },
 ]
 function getFallbackServers(type: string) {
