@@ -96,8 +96,17 @@ export async function GET(req: NextRequest) {
   const id = Number(searchParams.get('id'))
   const season = Number(searchParams.get('season') ?? 1)
   const episode = Number(searchParams.get('episode') ?? 1)
-  // RD token is sent by client (in header to keep it out of URL logs)
-  const rdToken = req.headers.get('x-rd-token') || searchParams.get('rd') || ''
+  // RD token resolution order:
+  //   1. User-supplied via x-rd-token header (their personal token from Settings)
+  //   2. Server-wide RD_TOKEN env var (set in Vercel for "just works" mode)
+  //   3. None — fall back to iframe embed
+  // The env-var fallback lets the site offer ad-free playback to all visitors
+  // without each one needing to set up their own RD account.
+  const rdToken =
+    req.headers.get('x-rd-token') ||
+    searchParams.get('rd') ||
+    process.env.RD_TOKEN ||
+    ''
 
   if (!id || isNaN(id)) {
     return NextResponse.json({ error: 'Missing id' }, { status: 400 })

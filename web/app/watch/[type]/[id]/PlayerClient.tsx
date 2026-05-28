@@ -142,14 +142,11 @@ const [season,  setSeason]  = useState(Number(searchParams.get('season')  ?? 1))
       return
     }
 
-    // For movies without RD token: use proxy iframe.
-    if (!rdToken) {
-      setStatusMsg('Add Real-Debrid in Settings for true ad-free movies')
-      fallbackToIframe(0, s, e)
-      return
-    }
-
-    // For movies WITH RD token: try the direct-stream pipeline.
+    // For movies: always try the direct-stream pipeline first.
+    // - With user token: their personal RD account is used.
+    // - Without user token: server falls back to RD_TOKEN env var (set on
+    //   Vercel for a shared "just works" mode). If that's also missing,
+    //   the API returns { found: false } and we drop to the iframe path.
     setStatus('loading')
     setMode('videojs')
     setVjsSources([])
@@ -157,9 +154,10 @@ const [season,  setSeason]  = useState(Number(searchParams.get('season')  ?? 1))
 
     try {
       const qs = new URLSearchParams({ type, id, season: String(s), episode: String(e) })
+      const headers: HeadersInit = rdToken ? { 'x-rd-token': rdToken } : {}
       const res = await fetch(`/api/stream-sources?${qs}`, {
         signal: abortRef.current.signal,
-        headers: { 'x-rd-token': rdToken },
+        headers,
       })
       const data: {
         found: boolean
