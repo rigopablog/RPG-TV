@@ -338,7 +338,7 @@ const [season,  setSeason]  = useState(Number(searchParams.get('season')  ?? 1))
                 data-rpgtv-player="true"
                 className="player-iframe z-20"
                 allowFullScreen
-                allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; clipboard-write; web-share"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                 referrerPolicy="origin"
                 onLoad={() => setStatus('ready')}
                 onError={() => {

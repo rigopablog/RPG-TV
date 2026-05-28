@@ -98,7 +98,7 @@ function extractInnerIframe(html: string, baseUrl: string): string | null {
 
   // Reject known "no content" placeholders that vidsrc/embed-su serve when they
   // don't actually have the title (the user sees a CentOS Apache 404 inside).
-  if (!chosen || /not_found|notfound|\/error|about:blank|\/404|\/unavailable/i.test(chosen)) return null
+  if (!chosen || /not_found|notfound|\/error|about:blank/i.test(chosen)) return null
 
   try {
     return new URL(chosen, baseUrl).toString()
@@ -108,39 +108,19 @@ function extractInnerIframe(html: string, baseUrl: string): string | null {
 }
 
 /**
- * Probe the extracted inner URL with a short timeout. If it 404s or returns
- * an Apache/nginx "Not Found" error page (often served as HTTP 200 by piracy
- * hosts), we treat the source as "no content" and try the next provider.
- *
- * We do a GET and peek at the first 1 KB of the body because some providers
- * (Apache/2.2.x CentOS) serve their error pages with a 200 status — a plain
- * HEAD check would wrongly pass them through and the user would see the
- * "Not Found" page inside the player.
+ * HEAD-probe the extracted inner URL with a short timeout. If it 404s or fails,
+ * we treat the source as "no content" and try the next provider.
+ * Some providers don't support HEAD — for those we accept any non-404 response.
  */
 async function innerIsAlive(url: string): Promise<boolean> {
   try {
     const r = await fetch(url, {
-      method: 'GET',
+      method: 'HEAD',
       headers: { 'User-Agent': UA, Referer: new URL(url).origin },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(5000),
       redirect: 'follow',
     })
-    if (r.status === 404) return false
-
-    // Peek at the response body to detect false-positive 200s that are really
-    // Apache/nginx default error pages. These have a very specific signature:
-    //   <h1>Not Found</h1>... <address>Apache/X.Y.Z (...) Server at ... Port N</address>
-    // We require BOTH the "<h1>Not Found</h1>" AND the "<address>...Server at"
-    // signature so we never false-positive on real player pages.
-    const raw = await r.text()
-    const lower = raw.toLowerCase()
-
-    const isApacheErrorPage =
-      lower.includes('<h1>not found</h1>') &&
-      lower.includes('<address>') &&
-      /server at .*port \d+/i.test(raw)
-
-    return !isApacheErrorPage
+    return r.status !== 404
   } catch {
     // Network error / timeout — assume it's alive; let the browser try.
     return true
@@ -152,13 +132,6 @@ function wrapperPage(innerSrc: string, referer: string): string {
   // Browser will sandbox the inner iframe: no popups, no top-nav, no extra windows.
   // The inner page can still run scripts to play the video (allow-scripts) and
   // talk to its own origin's APIs (allow-same-origin).
-  //
-  // Client-side health check (belt-and-suspenders for server-side detection):
-  // Real player pages always emit postMessage events (analytics, ready signals,
-  // ad framework messages, etc). Static error pages (Apache "Not Found",
-  // upstream-removed-content pages) emit nothing because they have no JS.
-  // If we receive ZERO messages within 6s of iframe load, treat it as a dead
-  // source and tell the parent to advance to the next server.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -173,44 +146,12 @@ function wrapperPage(innerSrc: string, referer: string): string {
 </head>
 <body>
 <iframe
-  id="player"
   src="${innerSrc.replace(/"/g, '&quot;')}"
-  sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock allow-forms allow-modals"
-  allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; clipboard-write; web-share"
+  sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock"
+  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
   allowfullscreen
   referrerpolicy="origin"
 ></iframe>
-<script>
-(function () {
-  var iframe = document.getElementById('player');
-  var heardFromIframe = false;
-  var failed = false;
-
-  // Any postMessage from the inner iframe (analytics, ready, ad events, etc)
-  // counts as proof of life. Real players emit these within ~1-2 seconds.
-  window.addEventListener('message', function (e) {
-    if (e.source === iframe.contentWindow) heardFromIframe = true;
-  });
-
-  function reportFailure() {
-    if (failed) return;
-    failed = true;
-    try { window.parent.postMessage('rpgtv:proxy-failed', '*'); } catch (_) {}
-  }
-
-  iframe.addEventListener('load', function () {
-    // 6 seconds is enough for any real player to emit at least one message.
-    setTimeout(function () {
-      if (!heardFromIframe) reportFailure();
-    }, 6000);
-  });
-
-  // Hard ceiling: if the iframe never even fires onload within 12s, fail anyway.
-  setTimeout(function () {
-    if (!heardFromIframe) reportFailure();
-  }, 12000);
-})();
-</script>
 </body>
 </html>`
 }

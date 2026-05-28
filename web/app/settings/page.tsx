@@ -25,23 +25,16 @@ export default function SettingsPage() {
   async function validate(t: string) {
     setStatus('saving')
     try {
-      // Validate via our server-side proxy (Real-Debrid doesn't allow CORS).
-      const res = await fetch('/api/rd-validate', {
-        method: 'POST',
-        headers: { 'x-rd-token': t },
+      const res = await fetch('https://api.real-debrid.com/rest/1.0/user', {
+        headers: { Authorization: `Bearer ${t}` },
       })
-      const data = await res.json() as {
-        valid: boolean
-        username?: string
-        premium?: number
-        error?: string
-      }
-      if (!data.valid) {
+      if (!res.ok) {
         setStatus('invalid')
         return
       }
-      setUsername(data.username ?? '')
-      setPremiumLeft(data.premium ?? 0)
+      const data = await res.json() as { username: string; premium: number; expiration: string }
+      setUsername(data.username)
+      setPremiumLeft(data.premium)
       setStatus('saved')
     } catch {
       setStatus('error')
