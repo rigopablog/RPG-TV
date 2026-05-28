@@ -137,7 +137,7 @@ function wrapperPage(innerSrc: string, referer: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="referrer" content="origin">
+<meta name="referrer" content="no-referrer">
 <title>Player</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
@@ -150,7 +150,7 @@ function wrapperPage(innerSrc: string, referer: string): string {
   sandbox="allow-scripts allow-same-origin allow-presentation allow-orientation-lock"
   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
   allowfullscreen
-  referrerpolicy="origin"
+  referrerpolicy="no-referrer"
 ></iframe>
 </body>
 </html>`
