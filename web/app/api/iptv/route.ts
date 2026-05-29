@@ -22,6 +22,7 @@ export const runtime = 'nodejs'
 export const revalidate = 3600 // Re-fetch iptv-org once per hour
 
 const IPTV_API = 'https://iptv-org.github.io/api'
+const FREE_TV_PLAYLIST = 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'
 
 interface Channel {
   id: string
@@ -47,6 +48,71 @@ interface Stream {
 
 interface JoinedChannel extends Channel {
   stream: { url: string; referrer: string | null; user_agent: string | null }
+  source: 'iptv-org' | 'free-tv'
+}
+
+/**
+ * Parse an M3U / M3U8 playlist text into JoinedChannel objects.
+ * Format reminder:
+ *   #EXTM3U
+ *   #EXTINF:-1 tvg-id="…" tvg-logo="…" group-title="…",Display Name
+ *   https://stream-url.m3u8
+ *
+ * group-title is often a country code or category — we keep it as a generic
+ * category tag rather than trying to be clever about language/country detection.
+ */
+function parseM3u(text: string, source: 'free-tv'): JoinedChannel[] {
+  const out: JoinedChannel[] = []
+  const lines = text.split(/\r?\n/)
+  let pendingMeta: { id: string; name: string; logo: string | null; group: string } | null = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]?.trim()
+    if (!line || line === '#EXTM3U') continue
+
+    if (line.startsWith('#EXTINF')) {
+      const attr = (key: string) => {
+        const m = line.match(new RegExp(`${key}="([^"]*)"`))
+        return m?.[1] ?? null
+      }
+      // Display name follows the LAST comma
+      const commaIdx = line.lastIndexOf(',')
+      const name = commaIdx >= 0 ? line.slice(commaIdx + 1).trim() : 'Unknown'
+      pendingMeta = {
+        id: attr('tvg-id') ?? name,
+        name,
+        logo: attr('tvg-logo'),
+        group: attr('group-title') ?? '',
+      }
+      continue
+    }
+
+    if (line.startsWith('#')) continue // any other directive — skip
+    if (!pendingMeta) continue // url without EXTINF — skip
+
+    // Apply same playability filters as iptv-org join:
+    //   - https only (browser blocks mixed http content)
+    //   - no required Referer/User-Agent (m3u format can encode these as
+    //     #EXTVLCOPT lines; we skip channels that needed them)
+    if (line.startsWith('https://')) {
+      out.push({
+        id: `freetv-${pendingMeta.id || pendingMeta.name}`.toLowerCase().replace(/\s+/g, '-'),
+        name: pendingMeta.name,
+        alt_names: [],
+        country: pendingMeta.group.slice(0, 2).toUpperCase(), // best-effort
+        languages: [],
+        categories: pendingMeta.group ? [pendingMeta.group.toLowerCase()] : [],
+        is_nsfw: false,
+        logo: pendingMeta.logo,
+        website: null,
+        stream: { url: line, referrer: null, user_agent: null },
+        source,
+      })
+    }
+    pendingMeta = null
+  }
+
+  return out
 }
 
 // In-memory cache for the joined channel list. The cache survives across
@@ -58,9 +124,12 @@ const CACHE_TTL = 60 * 60 * 1000 // 1 hour
 async function getJoinedChannels(): Promise<JoinedChannel[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL) return cache.joined
 
-  const [channelsRes, streamsRes] = await Promise.all([
+  // Fetch all three sources in parallel. Free-TV fail is non-fatal — if
+  // their playlist is down we still serve iptv-org channels.
+  const [channelsRes, streamsRes, freeTvRes] = await Promise.all([
     fetch(`${IPTV_API}/channels.json`, { next: { revalidate: 3600 } }),
     fetch(`${IPTV_API}/streams.json`, { next: { revalidate: 3600 } }),
+    fetch(FREE_TV_PLAYLIST, { next: { revalidate: 3600 } }).catch(() => null),
   ])
   if (!channelsRes.ok || !streamsRes.ok) {
     throw new Error('Failed to fetch iptv-org JSON')
@@ -102,7 +171,26 @@ async function getJoinedChannels(): Promise<JoinedChannel[]> {
         referrer: s.referrer,
         user_agent: s.user_agent,
       },
+      source: 'iptv-org',
     })
+  }
+
+  // Merge in Free-TV channels, deduped by stream URL (so we don't show the
+  // same channel twice when both lists have it).
+  if (freeTvRes && freeTvRes.ok) {
+    try {
+      const text = await freeTvRes.text()
+      const freeTvChannels = parseM3u(text, 'free-tv')
+      const seenUrls = new Set(joined.map((c) => c.stream.url))
+      for (const c of freeTvChannels) {
+        if (!seenUrls.has(c.stream.url)) {
+          joined.push(c)
+          seenUrls.add(c.stream.url)
+        }
+      }
+    } catch (_) {
+      // m3u parse failed — log nothing fatal, just continue with iptv-org list
+    }
   }
 
   cache = { joined, ts: Date.now() }
@@ -115,11 +203,15 @@ export async function GET(req: NextRequest) {
   const language = searchParams.get('language')?.toLowerCase()
   const category = searchParams.get('category')?.toLowerCase()
   const search = searchParams.get('search')?.toLowerCase()
+  const source = searchParams.get('source')?.toLowerCase() // 'iptv-org' or 'free-tv'
   const limit = Math.min(Number(searchParams.get('limit') ?? 200), 1000)
 
   try {
     let list = await getJoinedChannels()
 
+    if (source === 'iptv-org' || source === 'free-tv') {
+      list = list.filter((c) => c.source === source)
+    }
     if (country) list = list.filter((c) => c.country === country)
     if (language) list = list.filter((c) => (c.languages ?? []).includes(language))
     if (category) list = list.filter((c) => (c.categories ?? []).includes(category))
