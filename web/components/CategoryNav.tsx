@@ -29,7 +29,7 @@ const CATEGORIES: Category[] = [
   { href: '/',          labelKey: 'nav.home',        Icon: Clock },
   { href: '/movies',    labelKey: 'nav.movies',      Icon: Film },
   { href: '/shows',     labelKey: 'nav.tvShows',     Icon: Tv },
-  { href: '/live-tv',   labelKey: 'nav.liveTv',      Icon: Tv2,   badge: 'Soon' },
+  { href: '/live-tv',   labelKey: 'nav.liveTv',      Icon: Tv2 },
   { href: '/radio',     labelKey: 'nav.radio',       Icon: Radio, badge: 'Soon' },
   { href: '/watchlist', labelKey: 'nav.watchlist',   Icon: Heart },
   { href: '/search',    labelKey: 'nav.search',      Icon: Search },
