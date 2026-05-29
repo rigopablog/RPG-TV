@@ -108,6 +108,7 @@ export default function DashboardHero({ items }: Props) {
         media_type: mt,
         title,
         poster_path: item.poster_path,
+        vote_average: item.vote_average ?? 0,
       })
       setInList(true)
     }
