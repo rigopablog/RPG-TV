@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
-import Hero from '@/components/Hero'
+import DashboardHero from '@/components/DashboardHero'
+import CategoryNav from '@/components/CategoryNav'
 import MediaRow from '@/components/MediaRow'
 import {
   getTrending,
@@ -35,15 +36,17 @@ async function HomeContent() {
     getOnAirShows(),
   ])
 
+  const heroItems = trending.results.filter((i) => i.media_type !== 'person')
+
   return (
     <>
-      <Hero items={trending.results.filter((i) => i.media_type !== 'person')} />
+      {/* sticktv-style Dashboard: hero with side info panel + bottom category nav */}
+      <DashboardHero items={heroItems} />
+      <CategoryNav />
 
+      {/* Content rows below the dashboard for browse-style discovery */}
       <div className="space-y-10 py-10">
-        <MediaRow
-          title="🔥 Trending This Week"
-          items={trending.results.filter((i) => i.media_type !== 'person')}
-        />
+        <MediaRow title="🔥 Trending This Week" items={heroItems} />
         <MediaRow title="🎬 Now Playing" items={nowPlaying.results} mediaType="movie" />
         <MediaRow title="⭐ Top Rated Movies" items={topRatedMovies.results} mediaType="movie" />
         <MediaRow title="🎥 Popular Movies" items={popularMovies.results} mediaType="movie" />
@@ -59,9 +62,14 @@ async function HomeContent() {
 function HomeSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="h-[75vh] skeleton" />
+      <div className="h-[70vh] skeleton" />
+      <div className="flex gap-3 py-6 px-4">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="w-40 h-24 skeleton rounded-2xl flex-shrink-0" />
+        ))}
+      </div>
       <div className="space-y-10 py-10 px-6">
-        {[...Array(4)].map((_, i) => (
+        {[...Array(3)].map((_, i) => (
           <div key={i}>
             <div className="h-6 w-48 skeleton mb-4 rounded" />
             <div className="flex gap-3">

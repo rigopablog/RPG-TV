@@ -15,6 +15,9 @@ const EN: Dict = {
   'nav.watchlist': 'Watchlist',
   'nav.settings': 'Settings',
   'nav.search': 'Search',
+  'nav.liveTv': 'Live TV',
+  'nav.radio': 'Radio',
+  'nav.favorites': 'Favorites',
 
   // Hero / cards
   'hero.watchNow': 'Watch Now',
@@ -84,6 +87,9 @@ const ES: Dict = {
   'nav.watchlist': 'Mi Lista',
   'nav.settings': 'Configuración',
   'nav.search': 'Buscar',
+  'nav.liveTv': 'TV en Vivo',
+  'nav.radio': 'Radio',
+  'nav.favorites': 'Favoritos',
 
   // Hero / cards
   'hero.watchNow': 'Ver Ahora',
