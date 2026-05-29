@@ -114,19 +114,39 @@ function extractInnerIframe(html: string, baseUrl: string): string | null {
 }
 
 /**
- * HEAD-probe the extracted inner URL with a short timeout. If it 404s or fails,
- * we treat the source as "no content" and try the next provider.
- * Some providers don't support HEAD — for those we accept any non-404 response.
+ * Probe the extracted inner URL with a short timeout. Two checks:
+ *   1. HTTP 404 → dead
+ *   2. Apache/CentOS "Not Found" default error page (often served as HTTP 200
+ *      by piracy hosts after a JS redirect to /not_found). The page has a
+ *      very specific HTML signature we can match.
+ *
+ * Cloudnestra & friends sometimes serve different content to our server
+ * (Vercel US IP) vs the user's browser, so this server-side check can't
+ * catch everything — the client-side detection in wrapperPage is the
+ * second layer that catches in-browser redirects.
  */
 async function innerIsAlive(url: string): Promise<boolean> {
   try {
     const r = await fetch(url, {
-      method: 'HEAD',
+      method: 'GET',
       headers: { 'User-Agent': UA, Referer: new URL(url).origin },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
       redirect: 'follow',
     })
-    return r.status !== 404
+    if (r.status === 404) return false
+
+    // Peek at the body. Apache/nginx default error pages have a very
+    // specific signature: <h1>Not Found</h1> + <address>...Server at
+    // ... Port N. Real player pages cannot match both at once.
+    const raw = await r.text()
+    const lower = raw.toLowerCase()
+    const isApacheError =
+      lower.includes('<h1>not found</h1>') &&
+      lower.includes('<address>') &&
+      /server at .*port \d+/i.test(raw)
+    if (isApacheError) return false
+
+    return true
   } catch {
     // Network error / timeout — assume it's alive; let the browser try.
     return true
@@ -180,6 +200,7 @@ function wrapperPage(innerSrc: string, referer: string): string {
   var iframe = document.getElementById('player');
   var heardFromIframe = false;
   var failed = false;
+  var loadCount = 0;
 
   // Track any postMessage emitted by the inner iframe (real players do this).
   window.addEventListener('message', function (e) {
@@ -192,22 +213,34 @@ function wrapperPage(innerSrc: string, referer: string): string {
     try { window.parent.postMessage('rpgtv:proxy-failed', '*'); } catch (_) {}
   }
 
-  function probe() {
+  function probe(stage) {
     if (failed) return;
     var nested = -1;
     try { nested = iframe.contentWindow.length; } catch (_) {}
-    // Both signals say dead — advance.
+    // No nested frames AND silent → almost certainly the static Apache
+    // "Not Found" page (it has zero scripts and zero nested frames).
     if (nested === 0 && !heardFromIframe) {
-      reportFailure('no-frames-no-messages');
+      reportFailure('no-frames-no-messages-' + stage);
     }
   }
 
   iframe.addEventListener('load', function () {
-    // First probe at 3s — enough time for a real player to spin up its
-    // nested frames and emit at least one analytics ping.
-    setTimeout(probe, 3000);
-    // Second probe at 7s as a backstop for slow connections.
-    setTimeout(probe, 7000);
+    loadCount++;
+    // Loading twice means a JS redirect happened inside the iframe —
+    // the classic anti-embed pattern: page loads, script runs
+    // window.location = '/not_found'. Real players load exactly once.
+    // Wait 500ms to make sure no second onload fires (real iframes that
+    // finished loading don't re-fire onload).
+    if (loadCount > 1) {
+      reportFailure('iframe-redirected');
+      return;
+    }
+    // First probe at 2s — aggressive but most players have postMessage
+    // activity by then. False positives are recoverable (we advance to
+    // the next server which may be the real working one).
+    setTimeout(function () { probe('early'); }, 2000);
+    // Second probe at 5s as a backstop for slow players.
+    setTimeout(function () { probe('late'); }, 5000);
   });
 
   // Network-level failure (DNS fail, TLS fail, connection reset, malformed
@@ -220,7 +253,7 @@ function wrapperPage(innerSrc: string, referer: string): string {
 
   // Backstop: if the iframe never fires onload within 8s, assume the
   // upstream is dead (stalled DNS / TCP / TLS) and advance.
-  setTimeout(function () { if (!heardFromIframe) reportFailure('onload-never-fired'); }, 8000);
+  setTimeout(function () { if (loadCount === 0) reportFailure('onload-never-fired'); }, 8000);
 })();
 </script>
 </body>
