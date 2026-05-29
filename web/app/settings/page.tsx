@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Check, ExternalLink, Eye, EyeOff, Globe, Loader2, Trash2 } from 'lucide-react'
-import { getRDToken, setRDToken, clearRDToken, getLang, setLang, type AppLang } from '@/lib/storage'
+import { Check, ExternalLink, Eye, EyeOff, Globe, Loader2, Server, Trash2 } from 'lucide-react'
+import {
+  getRDToken, setRDToken, clearRDToken,
+  getLang, setLang, type AppLang,
+  getEnabledServers, setEnabledServers, type ServerSlot,
+} from '@/lib/storage'
 import { useT } from '@/lib/i18n'
 
 type Status = 'idle' | 'saving' | 'saved' | 'invalid' | 'error'
@@ -16,15 +20,34 @@ export default function SettingsPage() {
   const [username, setUsername] = useState<string | null>(null)
   const [premiumLeft, setPremiumLeft] = useState<number | null>(null)
   const [lang, setLangLocal] = useState<AppLang>('en')
+  const [movieServers, setMovieServersState] = useState<ServerSlot[]>([1, 2, 3, 4])
+  const [tvServers, setTvServersState] = useState<ServerSlot[]>([1, 2, 3, 4])
 
   useEffect(() => {
     setLangLocal(getLang())
+    setMovieServersState(getEnabledServers('movie'))
+    setTvServersState(getEnabledServers('tv'))
     const stored = getRDToken()
     if (stored) {
       setToken(stored)
       void validate(stored)
     }
   }, [])
+
+  function toggleServer(
+    type: 'movie' | 'tv',
+    slot: ServerSlot,
+  ) {
+    const current = type === 'movie' ? movieServers : tvServers
+    const setter = type === 'movie' ? setMovieServersState : setTvServersState
+    const next = current.includes(slot)
+      ? current.filter((s) => s !== slot)
+      : [...current, slot].sort((a, b) => a - b)
+    // Guard: never let the user disable all four — keep at least the last one
+    const safe = (next.length === 0 ? [slot] : next) as ServerSlot[]
+    setter(safe)
+    setEnabledServers(type, safe)
+  }
 
   async function validate(t: string) {
     setStatus('saving')
@@ -105,6 +128,83 @@ export default function SettingsPage() {
             >
               {t('settings.spanish')}
             </button>
+          </div>
+        </div>
+
+        {/* Playback Servers card */}
+        <div className="bg-cs-surface border border-white/5 rounded-2xl p-6 mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Server className="w-5 h-5 text-cs-red" />
+            <div>
+              <h2 className="text-xl font-bold">Playback Servers</h2>
+              <p className="text-sm text-gray-400">
+                Pick which servers the player is allowed to try, per content type.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mb-4 pl-8">
+            <span className="text-green-400">Servers 1 &amp; 2</span> use our sandboxed
+            proxy (popup-blocked).{' '}
+            <span className="text-yellow-400">Servers 3 &amp; 4</span> are direct
+            embeds (ads + popups). Auto-fallback skips dead servers.
+          </p>
+
+          {/* Movies */}
+          <div className="mb-4">
+            <p className="text-sm font-bold text-gray-300 mb-2">
+              {t('nav.movies')}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {([1, 2, 3, 4] as ServerSlot[]).map((slot) => {
+                const adFree = slot === 1 || slot === 2
+                const on = movieServers.includes(slot)
+                return (
+                  <button
+                    key={`movie-${slot}`}
+                    onClick={() => toggleServer('movie', slot)}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-bold border transition-all ${
+                      on
+                        ? adFree
+                          ? 'bg-green-900/40 text-green-300 border-green-500/40'
+                          : 'bg-yellow-900/30 text-yellow-300 border-yellow-500/30'
+                        : 'bg-black/30 text-gray-500 border-white/10 hover:border-white/30'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}Server {slot}
+                    {adFree && <span className="block text-[10px] font-normal opacity-70">ad-free</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* TV Shows */}
+          <div>
+            <p className="text-sm font-bold text-gray-300 mb-2">
+              {t('nav.tvShows')}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {([1, 2, 3, 4] as ServerSlot[]).map((slot) => {
+                const adFree = slot === 1 || slot === 2
+                const on = tvServers.includes(slot)
+                return (
+                  <button
+                    key={`tv-${slot}`}
+                    onClick={() => toggleServer('tv', slot)}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-bold border transition-all ${
+                      on
+                        ? adFree
+                          ? 'bg-green-900/40 text-green-300 border-green-500/40'
+                          : 'bg-yellow-900/30 text-yellow-300 border-yellow-500/30'
+                        : 'bg-black/30 text-gray-500 border-white/10 hover:border-white/30'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}Server {slot}
+                    {adFree && <span className="block text-[10px] font-normal opacity-70">ad-free</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 

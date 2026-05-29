@@ -8,7 +8,7 @@ import {
   Info, Loader2, Wifi, WifiOff, MonitorPlay, LayoutList,
 } from 'lucide-react'
 import { getMovieDetails, getShowDetails, getSeasonDetails } from '@/lib/tmdb'
-import { updateContinueWatching, getRDToken, getLang } from '@/lib/storage'
+import { updateContinueWatching, getRDToken, getLang, getEnabledServers } from '@/lib/storage'
 import { embedLang } from '@/lib/i18n'
 import type { TMDBShow, Episode } from '@/types/tmdb'
 import VideoPlayer, { type VSource, type VSubtitle } from '@/components/VideoPlayer'
@@ -66,7 +66,14 @@ const MOVIE_SERVERS = [
   { key: '2embed',          label: 'Server 4' },
 ]
 function getFallbackServers(type: string) {
-  return type === 'tv' ? TV_SERVERS : MOVIE_SERVERS
+  const full = type === 'tv' ? TV_SERVERS : MOVIE_SERVERS
+  // Filter by user's enabled-server preference. getEnabledServers returns
+  // 1-based slot indices ([1,2,3,4] by default). If somehow all servers
+  // are disabled we fall back to the full list so playback isn't bricked.
+  if (typeof window === 'undefined') return full
+  const enabled = getEnabledServers(type === 'tv' ? 'tv' : 'movie')
+  const filtered = full.filter((_, i) => enabled.includes((i + 1) as 1 | 2 | 3 | 4))
+  return filtered.length > 0 ? filtered : full
 }
 // Backwards-compat: some code still references FALLBACK_SERVERS for the iframe error handler.
 const FALLBACK_SERVERS = MOVIE_SERVERS

@@ -136,3 +136,41 @@ export function syncLangCookie() {
     document.cookie = `rpg_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`
   } catch {}
 }
+
+// ── Server preference ─────────────────────────────────────────────
+// Which numbered slots (Server 1, 2, 3, 4) the player is allowed to try
+// per content type. Lets the user isolate bugs (e.g. "only Server 1") or
+// stick to ad-free options (e.g. "only Servers 1 and 2").
+// Slot indices are 1-based to match what's shown in the UI.
+export type ServerSlot = 1 | 2 | 3 | 4
+const SERVERS_KEY_MOVIE = 'rpg_servers_movie'
+const SERVERS_KEY_TV = 'rpg_servers_tv'
+const ALL_SLOTS: ServerSlot[] = [1, 2, 3, 4]
+
+export function getEnabledServers(type: 'movie' | 'tv'): ServerSlot[] {
+  if (typeof window === 'undefined') return ALL_SLOTS
+  const key = type === 'tv' ? SERVERS_KEY_TV : SERVERS_KEY_MOVIE
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return ALL_SLOTS
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return ALL_SLOTS
+    const filtered = parsed.filter(
+      (n): n is ServerSlot => n === 1 || n === 2 || n === 3 || n === 4,
+    )
+    return filtered.length > 0 ? filtered : ALL_SLOTS
+  } catch {
+    return ALL_SLOTS
+  }
+}
+
+export function setEnabledServers(type: 'movie' | 'tv', slots: ServerSlot[]) {
+  if (typeof window === 'undefined') return
+  const key = type === 'tv' ? SERVERS_KEY_TV : SERVERS_KEY_MOVIE
+  try {
+    // Always keep at least one server enabled — guards against the user
+    // saving an empty set and getting permanently stuck on the error page.
+    const safe = slots.length > 0 ? slots : ALL_SLOTS
+    localStorage.setItem(key, JSON.stringify(safe))
+  } catch {}
+}
