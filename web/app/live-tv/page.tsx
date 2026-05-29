@@ -284,7 +284,7 @@ export default function LiveTVPage() {
               <div>
                 <p className="text-sm font-bold">{activeChannel.name}</p>
                 <p className="text-xs text-gray-400 uppercase">
-                  {activeChannel.country} · {activeChannel.languages.join(', ')}
+                  {activeChannel.country} · {(activeChannel.languages ?? []).join(', ')}
                 </p>
               </div>
             </div>

@@ -78,14 +78,25 @@ async function getJoinedChannels(): Promise<JoinedChannel[]> {
     if (!streamMap.has(s.channel)) streamMap.set(s.channel, s)
   }
 
-  // Only keep channels that have at least one playable stream + a logo
-  // (logoless channels make the UI ugly).
+  // Only keep channels that:
+  //   - have at least one stream
+  //   - whose stream is HTTPS (browsers block mixed http: content from our
+  //     https: Vercel site, and we can't proxy m3u8 segment-by-segment from
+  //     a serverless function without unreasonable cost)
+  //   - don't require referrer/user-agent headers a browser can't set
   const joined: JoinedChannel[] = []
   for (const c of channels) {
     const s = streamMap.get(c.id)
     if (!s) continue
+    if (!s.url.startsWith('https://')) continue
+    if (s.referrer || s.user_agent) continue // browser can't override these
     joined.push({
+      // Defensive defaults — iptv-org has some channels with null/missing
+      // languages/categories/alt_names arrays which would crash the filter.
       ...c,
+      alt_names: c.alt_names ?? [],
+      languages: c.languages ?? [],
+      categories: c.categories ?? [],
       stream: {
         url: s.url,
         referrer: s.referrer,
@@ -110,13 +121,13 @@ export async function GET(req: NextRequest) {
     let list = await getJoinedChannels()
 
     if (country) list = list.filter((c) => c.country === country)
-    if (language) list = list.filter((c) => c.languages.includes(language))
-    if (category) list = list.filter((c) => c.categories.includes(category))
+    if (language) list = list.filter((c) => (c.languages ?? []).includes(language))
+    if (category) list = list.filter((c) => (c.categories ?? []).includes(category))
     if (search) {
       list = list.filter(
         (c) =>
           c.name.toLowerCase().includes(search) ||
-          c.alt_names.some((a) => a.toLowerCase().includes(search)),
+          (c.alt_names ?? []).some((a) => a.toLowerCase().includes(search)),
       )
     }
 
