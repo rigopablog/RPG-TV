@@ -68,13 +68,51 @@ interface RawStream {
   url?: string
 }
 
-async function fetchStreams(path: string, opts: { rdKey?: string } = {}): Promise<TorrentioStream[]> {
+export type AudioLang = 'en' | 'es'
+
+/**
+ * Score a torrent title by how likely its audio matches the requested language.
+ * Higher = better. Used as the primary sort key when a language preference
+ * is set; quality/seeders break ties.
+ *
+ * For Spanish requests we prefer Latin American Spanish over Castilian Spanish
+ * since Castilian sounds wildly different to LATAM viewers (the user said
+ * "Latin American Spanish" specifically).
+ */
+function langScore(title: string, want: AudioLang): number {
+  const t = title.toLowerCase()
+  if (want === 'es') {
+    // Specifically LATAM dub (BEST match)
+    if (/\b(latino|latinoamericano|mexico|argentina|colombia|chile|cas\.lat|lat\.esp)\b/.test(t)) return 4
+    // Dual / multi audio (usually English + Spanish)
+    if (/\b(dual|multi|multilang|multi[\-\s]?audio)\b/.test(t)) return 3
+    // Generic Spanish marker (might be Castilian — still better than no Spanish)
+    if (/\b(spanish|español|espanol|esp|cast(ellano)?)\b/.test(t)) return 2
+    // Dubbed of any kind — often includes Spanish
+    if (/\b(dub|dubbed)\b/.test(t)) return 1
+    // English-only marker present? Demote.
+    if (/\b(english|eng|en)\b/.test(t)) return -1
+    return 0
+  }
+  // English (default)
+  if (/\b(english|eng|en)\b/.test(t)) return 2
+  if (/\b(dual|multi)\b/.test(t)) return 1
+  // Foreign-only releases get demoted
+  if (/\b(latino|spanish|español|french|french|german|italian|hindi)\b/.test(t)) return -1
+  return 0
+}
+
+async function fetchStreams(
+  path: string,
+  opts: { rdKey?: string; lang?: AudioLang } = {},
+): Promise<TorrentioStream[]> {
   const config = buildConfig(opts)
   const url = `${TORRENTIO_BASE}/${config}/stream/${path}.json`
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`Torrentio ${res.status}`)
   const data = (await res.json()) as { streams?: RawStream[] }
   if (!data.streams) return []
+  const lang = opts.lang ?? 'en'
   return data.streams
     .map((s) => {
       const meta = parseTitle(s.title)
@@ -90,20 +128,31 @@ async function fetchStreams(path: string, opts: { rdKey?: string } = {}): Promis
     })
     .filter((s) => !!s.infoHash)
     .sort((a, b) => {
-      // Prefer 1080p first — usually H.264 MP4, plays in browser.
-      // 4K is often HEVC/MKV which browsers can't decode.
-      // Demote known browser-incompatible markers (REMUX, x265, HEVC) within same quality.
+      // 1. Language match (most important when user wants Spanish)
+      const la = langScore(a.title, lang)
+      const lb = langScore(b.title, lang)
+      if (la !== lb) return lb - la
+
+      // 2. Prefer 1080p — usually H.264 MP4, plays in browser.
+      //    4K is often HEVC/MKV which browsers can't decode.
       const order = { '1080p': 0, '720p': 1, '4k': 2, '480p': 3, other: 4 }
       const q = order[a.quality] - order[b.quality]
       if (q !== 0) return q
+
+      // 3. Demote known browser-incompatible codecs within same quality
       const aBad = /\b(remux|x265|hevc|h\.265|h265)\b/i.test(a.title) ? 1 : 0
       const bBad = /\b(remux|x265|hevc|h\.265|h265)\b/i.test(b.title) ? 1 : 0
       if (aBad !== bBad) return aBad - bBad
+
+      // 4. More seeders = faster RD cache hit
       return (b.seeders ?? 0) - (a.seeders ?? 0)
     })
 }
 
-export async function searchMovie(imdbId: string, opts: { rdKey?: string } = {}) {
+export async function searchMovie(
+  imdbId: string,
+  opts: { rdKey?: string; lang?: AudioLang } = {},
+) {
   return fetchStreams(`movie/${imdbId}`, opts)
 }
 
@@ -111,7 +160,7 @@ export async function searchEpisode(
   imdbId: string,
   season: number,
   episode: number,
-  opts: { rdKey?: string } = {},
+  opts: { rdKey?: string; lang?: AudioLang } = {},
 ) {
   return fetchStreams(`series/${imdbId}:${season}:${episode}`, opts)
 }

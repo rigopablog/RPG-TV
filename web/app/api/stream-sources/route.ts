@@ -37,6 +37,10 @@ async function tmdbFetch(path: string): Promise<unknown | null> {
   const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY
   const url = new URL(`https://api.themoviedb.org/3${path}`)
   if (apiKey && !token) url.searchParams.set('api_key', apiKey)
+  // Always use English here regardless of the user's UI language. Torrent
+  // releases are named in English even when LATAM-dubbed, so the English
+  // title gives the best filename-match score in magnetToStream().
+  url.searchParams.set('language', 'en-US')
   const res = await fetch(url.toString(), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     signal: AbortSignal.timeout(8000),
@@ -140,11 +144,14 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 2. Scrape Torrentio for magnets
+    // 2. Scrape Torrentio for magnets, preferring the user's language.
+    // Language preference comes from the rpg_lang cookie (set by Settings).
+    // 'es' → prefer LATAM-dubbed / dual-audio torrents; 'en' → English releases.
     step = 'torrentio'
+    const audioLang = req.cookies.get('rpg_lang')?.value === 'es' ? 'es' : 'en'
     const streams = type === 'movie'
-      ? await Torrentio.searchMovie(imdbId)
-      : await Torrentio.searchEpisode(imdbId, season, episode)
+      ? await Torrentio.searchMovie(imdbId, { lang: audioLang })
+      : await Torrentio.searchEpisode(imdbId, season, episode, { lang: audioLang })
 
     if (!streams.length) {
       return NextResponse.json({
