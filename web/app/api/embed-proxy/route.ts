@@ -26,7 +26,15 @@ export const dynamic = 'force-dynamic'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0 Safari/537.36'
 
 // ── Source URL builders ────────────────────────────────────────────────────
-// NB: vidsrc.in 404s as of May 2026; vidsrc.me redirects to vidsrcme.ru and is alive.
+// Domain history (as of May 2026):
+//   - vidsrc.in     → dead (404)
+//   - vidsrc.me     → redirected to vidsrcme.ru
+//   - vidsrcme.ru   → still alive but a banner now says
+//                     "Change your embed URLs to vsembed.ru / vsembed.su"
+//                     so we should migrate to vsembed.ru. vsembed.su is
+//                     currently down; .ru works and uses the SAME path
+//                     format as vidsrc.me/.ru, so it's a 1-line swap.
+//
 // `lang` is a 2-letter language hint (e.g. 'es', 'en') — most providers honor
 // it as the default subtitle/dub language via `?ds_lang=` (vidsrc family) or
 // equivalent. Falls back gracefully if the provider ignores it.
@@ -43,16 +51,16 @@ function buildSourceUrl(opts: {
   const langQs = lang ? `&ds_lang=${lang}` : ''
   switch (source) {
     case 'vidsrc-me':
-    case 'vidsrc-in': // legacy alias — routes to vidsrc.me now
+    case 'vidsrc-in': // legacy alias — routes to vsembed.ru now
       if (imdb) {
         return type === 'movie'
-          ? `https://vidsrc.me/embed/movie?imdb=${imdb}${langQs}`
-          : `https://vidsrc.me/embed/tv?imdb=${imdb}&season=${season}&episode=${episode}${langQs}`
+          ? `https://vsembed.ru/embed/movie?imdb=${imdb}${langQs}`
+          : `https://vsembed.ru/embed/tv?imdb=${imdb}&season=${season}&episode=${episode}${langQs}`
       }
       if (!tmdb) return null
       return type === 'movie'
-        ? `https://vidsrc.me/embed/movie?tmdb=${tmdb}${langQs}`
-        : `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}${langQs}`
+        ? `https://vsembed.ru/embed/movie?tmdb=${tmdb}${langQs}`
+        : `https://vsembed.ru/embed/tv?tmdb=${tmdb}&season=${season}&episode=${episode}${langQs}`
     case 'vidsrc-xyz':
       if (!tmdb) return null
       return type === 'movie'
